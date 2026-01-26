@@ -10,6 +10,35 @@
 
 #define unpack_color(color) (color.r), (color.g), (color.b), (color.a)
 
+const struct Tetromino I_BLOCK = {
+        .shape = {
+                { // Rotation 1: rotation left of rotation 4
+                        {0, 0, 0, 0},
+                        {1, 1, 1, 1},
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
+                },
+                { // Rotation 2: rotation left of rotation 1
+                        {0, 1, 0, 0},
+                        {0, 1, 0, 0},
+                        {0, 1, 0, 0},
+                        {0, 1, 0, 0},
+                },
+                { // Rotation 3: rotation left of rotation 2
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
+                        {1, 1, 1, 1},
+                        {0, 0, 0, 0},
+                },
+                { // Rotation 4: rotation left of rotation 3
+                        {0, 0, 1, 0},
+                        {0, 0, 1, 0},
+                        {0, 0, 1, 0},
+                        {0, 0, 1, 0},
+                }
+        }
+};
+
 bool game_init(GameContext* GC) {
         if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
                 fprintf(stderr, "SDL_Init error: %s\n", SDL_GetError());
