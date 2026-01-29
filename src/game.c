@@ -103,12 +103,12 @@ bool game_init(GameContext* GC) {
                 &GD->tetrominoCollection,
                 &GD->currentTetromino,
                 GAME_POS_X + (GAME_WIDTH - 4.0f * PARTICLE_COUNT_IN_BLOCK_COLUMN) / 2.0f,
-                0
+                GD->currentTetromino.y = - 2.0f * PARTICLE_COUNT_IN_BLOCK_ROW
         );
         InitializeTetriminoData(
                 &GD->tetrominoCollection,
                 &GD->nextTetromino,
-                GAME_POS_X + GAME_WIDTH + GAME_PADDING + (1/3.0f * VIRTUAL_WIDTH - 4.0f * PARTICLE_COUNT_IN_BLOCK_COLUMN) / 2.0f,
+                GAME_POS_X + GAME_WIDTH + GAME_PADDING + (1 / 3.0f * VIRTUAL_WIDTH - 4.0f * PARTICLE_COUNT_IN_BLOCK_COLUMN) / 2.0f,
                 GAME_POS_Y + (GAME_HEIGHT - PARTICLE_COUNT_IN_BLOCK_ROW * 4.0f) / 2.0f
         );
 
@@ -137,12 +137,13 @@ void game_handle_events(GameContext* GC) {
                                         }
 
                                         case SDLK_UP: {
-                                                GC->gameData.currentTetromino.rotation = (GC->gameData.currentTetromino.rotation + 3) % 4;
+                                                GC->gameData.currentTetromino.rotation = (GC->gameData.currentTetromino.rotation + 1) % 4;
                                                 break;
                                         }
 
                                         case SDLK_DOWN: {
-                                                GC->gameData.currentTetromino.rotation = (GC->gameData.currentTetromino.rotation + 1) % 4;
+                                                // TODO: Add velocity concept to this too
+                                                GC->gameData.currentTetromino.y += GC->delta_time * 200;
                                                 break;
                                         }
 
@@ -326,7 +327,7 @@ void game_render(GameContext* GC) {
         renderAllParticles(GC->renderer, GC->gameData.colorGrid);
 
         renderTetrimino(GC->renderer, &GC->gameData.currentTetromino);
-        // Part of UI: renderTetrimino(GC->renderer, &GC->gameData.nextTetromino);
+        renderTetrimino(GC->renderer, &GC->gameData.nextTetromino); // Part of UI:
 
         gameRenderDebug(GC->renderer, &GC->gameData.currentTetromino);
         // Display modified renderer
@@ -342,39 +343,159 @@ void game_cleanup(GameContext* GC) {
 }
 
 static inline void InitializeTetriminoCollection(TetrominoCollection* TC) {
-        TC->capacity = 4; // 4 Tetriminos: | Shaped, Z Shaped, Square Shaped, L Shape
+        TC->capacity = 5; // 4 Tetriminos: | Shaped, Z Shaped, Square Shaped, L Shape
         TC->tetrominos = malloc(sizeof(struct Tetromino) * TC->capacity);
         TC->count = 0;
         TC->tetrominos[TC->count++] = (struct Tetromino) {
                 .name = "Line Tetrimino", // Display Name!
                 .shape = {
-                { // Rotation 1: rotation left of rotation 4
-                {0, 0, 0, 0},
-                {1, 1, 1, 1},
-                {0, 0, 0, 0},
-                {0, 0, 0, 0},
-                },
-                { // Rotation 2: rotation left of rotation 1
-                {0, 1, 0, 0},
-                {0, 1, 0, 0},
-                {0, 1, 0, 0},
-                {0, 1, 0, 0},
-                },
-                { // Rotation 3: rotation left of rotation 2
-                {0, 0, 0, 0},
-                {0, 0, 0, 0},
-                {1, 1, 1, 1},
-                {0, 0, 0, 0},
-                },
-                { // Rotation 4: rotation left of rotation 3
-                {0, 0, 1, 0},
-                {0, 0, 1, 0},
-                {0, 0, 1, 0},
-                {0, 0, 1, 0},
-                }
+                        { // Rotation 1: rotation left of rotation 4
+                                {0, 0, 0, 0},
+                                {1, 1, 1, 1},
+                                {0, 0, 0, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 2: rotation left of rotation 1
+                                {0, 1, 0, 0},
+                                {0, 1, 0, 0},
+                                {0, 1, 0, 0},
+                                {0, 1, 0, 0},
+                        },
+                        { // Rotation 3: rotation left of rotation 2
+                                {0, 0, 0, 0},
+                                {0, 0, 0, 0},
+                                {1, 1, 1, 1},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 4: rotation left of rotation 3
+                                {0, 0, 1, 0},
+                                {0, 0, 1, 0},
+                                {0, 0, 1, 0},
+                                {0, 0, 1, 0},
+                        }
                 }
         };
-        // TODO: Other Blocks
+
+        TC->tetrominos[TC->count++] = (struct Tetromino) {
+                .name = "Square Tetrimino", // Display Name!
+                .shape = {
+                        { // Rotation 1: rotation left of rotation 4
+                                {0, 0, 0, 0},
+                                {0, 1, 1, 0},
+                                {0, 1, 1, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 2: rotation left of rotation 1
+                                {0, 0, 0, 0},
+                                {0, 1, 1, 0},
+                                {0, 1, 1, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 3: rotation left of rotation 2
+                                {0, 0, 0, 0},
+                                {0, 1, 1, 0},
+                                {0, 1, 1, 1},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 4: rotation left of rotation 3
+                                {0, 0, 0, 0},
+                                {0, 1, 1, 0},
+                                {0, 1, 1, 0},
+                                {0, 0, 0, 0},
+                        }
+                }
+        };
+
+        TC->tetrominos[TC->count++] = (struct Tetromino) {
+                .name = "Skew Tetrimino", // Display Name!
+                .shape = {
+                        { // Rotation 1: rotation left of rotation 4
+                                {0, 0, 0, 0},
+                                {0, 0, 1, 1},
+                                {0, 1, 1, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 2: rotation left of rotation 1
+                                {0, 1, 0, 0},
+                                {0, 1, 1, 0},
+                                {0, 0, 1, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 3: rotation left of rotation 2
+                                {0, 0, 0, 0},
+                                {0, 1, 1, 0},
+                                {1, 1, 0, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 4: rotation left of rotation 3
+                                {0, 0, 0, 0},
+                                {0, 1, 0, 0},
+                                {0, 1, 1, 0},
+                                {0, 0, 1, 0},
+                        }
+                }
+        };
+
+        TC->tetrominos[TC->count++] = (struct Tetromino) {
+                .name = "L Tetrimino", // Display Name!
+                .shape = {
+                        { // Rotation 1: rotation left of rotation 4
+                                {0, 0, 0, 0},
+                                {0, 1, 0, 0},
+                                {0, 1, 0, 0},
+                                {0, 1, 1, 0},
+                        },
+                        { // Rotation 2: rotation left of rotation 1
+                                {0, 0, 0, 0},
+                                {0, 0, 0, 1},
+                                {0, 1, 1, 1},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 3: rotation left of rotation 2
+                                {0, 1, 1, 0},
+                                {0, 0, 1, 0},
+                                {0, 0, 1, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 4: rotation left of rotation 3
+                                {0, 0, 0, 0},
+                                {1, 1, 1, 0},
+                                {1, 0, 0, 0},
+                                {0, 0, 0, 0},
+                        }
+                }
+        };
+
+
+        TC->tetrominos[TC->count++] = (struct Tetromino) {
+                .name = "T Tetrimino", // Display Name!
+                .shape = {
+                        { // Rotation 1: rotation left of rotation 4
+                                {0, 0, 0, 0},
+                                {0, 1, 1, 1},
+                                {0, 0, 1, 0},
+                                {0, 0, 1, 0},
+                        },
+                        { // Rotation 2: rotation left of rotation 1
+                                {0, 1, 0, 0},
+                                {0, 1, 1, 1},
+                                {0, 1, 0, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 3: rotation left of rotation 2
+                                {0, 1, 0, 0},
+                                {0, 1, 0, 0},
+                                {1, 1, 1, 0},
+                                {0, 0, 0, 0},
+                        },
+                        { // Rotation 4: rotation left of rotation 3
+                                {0, 0, 0, 0},
+                                {0, 0, 1, 0},
+                                {1, 1, 1, 0},
+                                {0, 0, 1, 0},
+                        }
+                }
+        };
 }
 
 static inline void CleanUpTetriminoCollection(TetrominoCollection* TC) {
@@ -481,7 +602,7 @@ static void destroyCurrentTetromino(GameData* GD) {
 
         // Reset position and velocity for the new current tetromino
         GD->currentTetromino.x = GAME_POS_X + (GAME_WIDTH - 4.0f * PARTICLE_COUNT_IN_BLOCK_COLUMN) / 2.0f;
-        GD->currentTetromino.y = 0;
+        GD->currentTetromino.y = - 2.0f * PARTICLE_COUNT_IN_BLOCK_ROW;
         GD->currentTetromino.velY = 0;
 
         // Initialize new next tetromino
