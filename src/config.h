@@ -15,8 +15,8 @@
 #define GAME_PADDING 5
 #define GAME_POS_X GAME_PADDING
 #define GAME_POS_Y GAME_PADDING
-#define GAME_WIDTH (((int)((2.0f/3.0f) * VIRTUAL_WIDTH)) - 2 * GAME_PADDING)
-#define GAME_HEIGHT (VIRTUAL_HEIGHT - 2 * GAME_PADDING)
+#define GAME_WIDTH (int) (((2 * VIRTUAL_WIDTH) / 3) - 2 * GAME_PADDING)
+#define GAME_HEIGHT (int) (VIRTUAL_HEIGHT - 2 * GAME_PADDING)
 
 // TODO: Better name cause this shit confusing!
 #define PARTICLE_COUNT_IN_BLOCK_COLUMN 10
