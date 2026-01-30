@@ -87,6 +87,7 @@ bool game_init(GameContext* GC) {
         // Game Data Initialization
         GameData* GD = &GC->gameData;
         GD->gameOver = false;
+        GD->sandRemoveTrigger = false;
         GD->level = 0;
         GD->score = 0;
 
@@ -142,17 +143,15 @@ void game_handle_events(GameContext* GC) {
                                                 break;
                                         }
 
-                                        // TODO: Fix collision detection so that this works
-                                        //      Alternative solution: find the pixel closest to it vertically down, and add y difference to it's y
-                                        // case SDLK_DOWN: {
-                                        //         GC->gameData.currentTetromino.y += GC->delta_time * (~0);
-                                        //         break;
-                                        // }
-
-                                        case SDLK_d: {
-                                                destroyCurrentTetromino(&GC->gameData);
+                                        case SDLK_DOWN: {
+                                                if (GC->gameData.currentTetromino.y > (GAME_POS_Y + PARTICLE_COUNT_IN_BLOCK_ROW * 4 + 10)) { // 10 to avoid tetromino-tetromino collision
+                                                        destroyCurrentTetromino(&GC->gameData);
+                                                }
                                                 break;
                                         }
+                                        // TODO: Fix collision detection so that this works
+                                        //      Alternative solution: find the pixel closest to it vertically down, and add y difference to it's y
+                                        // GC->gameData.currentTetromino.y += GC->delta_time * (~0);
                                 }
                                 break;
                         }
@@ -185,13 +184,42 @@ void game_handle_events(GameContext* GC) {
         TD->x = SDL_clamp(TD->x, minX, maxX);
 }
 
-static void update_sand_particle_falling(int (*colorGrid)[GAME_WIDTH]) {
+static void removeParticlesGracefully(GameContext* GC) {
+        int (*colorGrid)[GAME_WIDTH] = GC->gameData.colorGrid;
+        static float timer = 0.0f;
+        timer += GC->delta_time;
+
+        if (timer > (TIME_FOR_SAND_DELETION / (GC->gameData.level + 1))) {
+                for (int y = 0; y < GAME_HEIGHT; y++) {
+                        for (int x = 0; x < GAME_WIDTH; x++) {
+                                if (colorGrid[y][x] == COLOR_DELETE_MARKED_SAND) {
+                                        colorGrid[y][x] = COLOR_NONE;
+                                }
+                        }
+                }
+
+                // TODO: Scores
+
+                // Reward for scoring
+                GC->gameData.currentTetromino.velY /= 2.0f;
+
+                GC->gameData.sandRemoveTrigger = false;
+                timer = 0.0f;
+        }
+}
+
+static bool update_sand_particle_falling(int (*colorGrid)[GAME_WIDTH]) {
+        bool returnValue = false; // whether sands that need to be removed is in the colorGrid
+
         // Process from bottom to top (second-to-bottom row up to top)
         for (int y = GAME_HEIGHT - 2; y >= 0; y--) {
                 // Process each column
                 for (int x = 0; x < GAME_WIDTH; x++) {
                         // Skip empty cells
                         if (colorGrid[y][x] == COLOR_NONE) {
+                                continue;
+                        } else if (colorGrid[y][x] == COLOR_DELETE_MARKED_SAND) {
+                                returnValue = true;
                                 continue;
                         }
 
@@ -229,6 +257,7 @@ static void update_sand_particle_falling(int (*colorGrid)[GAME_WIDTH]) {
                         }
                 }
         }
+        return returnValue;
 }
 
 static bool checkIfTetriminoCollidingWithFloor(TetrominoData* TD) {
@@ -327,22 +356,70 @@ static bool checkIfTetriminoCollidesWithOtherParticles(GameData* GD) {
         return false;
 }
 
-static void floodFillTest(int (*colorGrid)[GAME_WIDTH]) {
+static bool floodFillDetectDiagonal(int grid[GAME_HEIGHT][GAME_WIDTH], bool visited[GAME_HEIGHT][GAME_WIDTH], int x, int y, ColorCode color) {
+        // Recurive function that somehow works! (TODO: might have some edge cases, check and fix that)
+        if (x < 0 || x >= GAME_WIDTH || y < 0 || y >= GAME_HEIGHT) {
+                return false;
+        }
 
+        if (visited[y][x] || (grid[y][x] != color)) {
+                return false;
+        }
+
+        visited[y][x] = true;
+        bool reachesRight = (x == GAME_WIDTH - 1); // check it any of the particles of same color connected have reased the end
+
+        // 8 directions
+        for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                        if (dx == 0 && dy == 0) {
+                                continue;
+                        }
+
+                        reachesRight =  reachesRight | floodFillDetectDiagonal(grid, visited, x + dx, y + dy, color);
+                }
+        }
+
+        return reachesRight;
 }
 
 static void sandClearance(GameData* GD) {
-        int (*colorGrid)[GAME_WIDTH] = GD->colorGrid;
+        int (*grid)[GAME_WIDTH] = GD->colorGrid;
 
-        // Algorithm: Flood fill
+        for (ColorCode color = 0; color < COLOR_COUNT; color++) {
+                for (int y = 0; y < GAME_HEIGHT; y++) {
+                        if (grid[y][0] != color) {
+                                continue;
+                        }
 
+                        bool visited[GAME_HEIGHT][GAME_WIDTH] = {0};
+
+                        bool spansLeftToRight = floodFillDetectDiagonal(grid, visited, 0, y, color);
+
+                        if (spansLeftToRight) {
+                                for (int yy = 0; yy < GAME_HEIGHT; yy++) {
+                                        for (int xx = 0; xx < GAME_WIDTH; xx++) {
+                                                if (visited[yy][xx]) {
+                                                        grid[yy][xx] = COLOR_DELETE_MARKED_SAND;
+                                                }
+                                        }
+                                }
+                        }
+                }
+        }
 }
 
 void game_update(GameContext* GC) {
         GameData* GD = &GC->gameData;
         TetrominoData* TD = &GD->currentTetromino;
 
-        update_sand_particle_falling(GD->colorGrid);
+        if (update_sand_particle_falling(GD->colorGrid)) {
+                GD->sandRemoveTrigger = true;
+        };
+
+        if (GD->sandRemoveTrigger) {
+                removeParticlesGracefully(GC);
+        }
 
         // Steps
         // 1. Check if current tetromino is colliding
@@ -361,7 +438,7 @@ void game_update(GameContext* GC) {
         // TODO: Maximum clearance algorithm, delete sand, ... score, level, ...
         // 2. Maximum clearance
         //      2.a Detect
-        //      2.b Convert all to color_none gracefully i.e go from COLOR_WHITE to COLOR_NONE
+        //      2.b Convert all to color_none gracefully i.e go from COLOR_DELETE_MARKED_SAND to COLOR_NONE
         sandClearance(GD); // TODO: heavy function but implement first
 }
 
@@ -373,7 +450,7 @@ static void renderSandBlock(SDL_Renderer* renderer, SandBlock* SB) {
                 .w = PARTICLE_COUNT_IN_BLOCK_COLUMN,
                 .h = PARTICLE_COUNT_IN_BLOCK_ROW
         };
-        SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(COLOR_WHITE)));
+        SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(COLOR_DELETE_MARKED_SAND)));
         SDL_RenderDrawRect(renderer, &SB_Rect);
 
         // Sand
@@ -456,9 +533,23 @@ static void gameRenderDebug(SDL_Renderer* renderer, TetrominoData* TD) {
 static void renderAllParticles(SDL_Renderer* renderer, int colorGrid[GAME_HEIGHT][GAME_WIDTH]) {
         // TODO: Optimize this!
         // Causes FPS to drop from stable 60 to ~30-39
+        SDL_Color color_for_delete_marked_sand_defined = enumToColor(COLOR_DELETE_MARKED_SAND);
+
+        int randValue = rand() % 2 == 0 ? 1: -1;
+        SDL_Color color_for_delete_marked_sand = {
+                .r = color_for_delete_marked_sand_defined.r + randValue * rand() % 50,
+                .g = color_for_delete_marked_sand_defined.g + randValue * rand() % 50,
+                .b = color_for_delete_marked_sand_defined.b + randValue * rand() % 50,
+                .a = 255
+        };
+
         for (int y = 0; y < GAME_HEIGHT; y++) {
                 for (int x = 0; x < GAME_WIDTH; x++) {
-                        SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(colorGrid[y][x])));
+                        if (colorGrid[y][x] == COLOR_DELETE_MARKED_SAND) {
+                                SDL_SetRenderDrawColor(renderer, unpack_color(color_for_delete_marked_sand));
+                        } else {
+                                SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(colorGrid[y][x])));
+                        }
                         SDL_RenderDrawPoint(renderer, GAME_POS_X + x, GAME_POS_Y + y);
                 }
         }
@@ -714,7 +805,7 @@ static SDL_Color enumToColor(ColorCode CC){
                 };
 
 
-                case COLOR_WHITE: {
+                case COLOR_DELETE_MARKED_SAND: {
                         color = (SDL_Color) {
                                 .r = 240,
                                 .g = 240,
@@ -758,13 +849,13 @@ static void destroyCurrentTetromino(GameData* GD) {
                                 int grid_y = block_base_y + y_offset;
 
                                 // Check if within vertical bounds
-                                // if (grid_y < 0 || grid_y >= GAME_HEIGHT) continue; // temporary
+                                if (grid_y < 0 || grid_y >= GAME_HEIGHT) continue; // temporary
 
                                 for (int x_offset = 0; x_offset < PARTICLE_COUNT_IN_BLOCK_COLUMN; x_offset++) {
                                         int grid_x = block_base_x + x_offset;
 
                                         // Check if within horizontal bounds
-                                        // if (grid_x < 0 || grid_x >= GAME_WIDTH) continue; // temporary
+                                        if (grid_x < 0 || grid_x >= GAME_WIDTH) continue; // temporary
 
                                         // Place the color in the grid
                                         GD->colorGrid[grid_y][grid_x] = color;

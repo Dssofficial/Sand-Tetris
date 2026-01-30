@@ -26,5 +26,6 @@
 
 #define GRAVITY 9.8f
 #define TETRIMINO_MOVE_SPEED 150
+#define TIME_FOR_SAND_DELETION 1.0f
 
 #endif

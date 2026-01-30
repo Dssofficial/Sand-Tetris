@@ -7,13 +7,14 @@
 #include "config.h"
 
 typedef enum {
-        COLOR_RED,
+        COLOR_RED = 0,
         COLOR_GREEN,
         COLOR_BLUE,
 
         COLOR_COUNT,
 
-        COLOR_WHITE,
+        COLOR_DELETE_MARKED_SAND,
+
         COLOR_NONE, // Special Type!
 } ColorCode;
 
@@ -59,6 +60,7 @@ typedef struct {
         TetrominoData nextTetromino;
 
         bool gameOver;
+        bool sandRemoveTrigger;
 } GameData;
 
 // Main game context
