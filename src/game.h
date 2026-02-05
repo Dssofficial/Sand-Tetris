@@ -5,7 +5,9 @@
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "config.h"
+#include "font.h"
 
 typedef enum {
         COLOR_RED = 0,
@@ -54,11 +56,6 @@ typedef struct {
 } TetrominoData;
 
 typedef struct {
-        char** audio_array;
-        int currently_playing;
-} AudioData;
-
-typedef struct {
         // Data on all things needed for game to function
         unsigned score, level;
 
@@ -71,7 +68,13 @@ typedef struct {
 
         bool gameOver;
         bool sandRemoveTrigger;
+
+        uint32_t totalSandCleared;
 } GameData;
+
+typedef struct {
+
+} AudioData;
 
 // Main game context
 typedef struct {
@@ -91,6 +94,8 @@ typedef struct {
 
         // Gamedata: gameOver? score, level, sanddata, which tetromino next?, etc
         GameData gameData;
+        AudioData audioData;
+        FontData fontData;
 } GameContext;
 
 bool game_init(GameContext*);

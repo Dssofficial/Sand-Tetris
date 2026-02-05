@@ -1,16 +1,15 @@
 CC = gcc
-CFLAGS = -Wall -std=c11
-CFLAGS += `sdl2-config --cflags`
+
+CFLAGS = -Wall -std=c11 `sdl2-config --cflags`
 # CFLAGS += -O2
 # CFLAGS += -fsanitize=address,undefined
-# CFLAGS += `pkg-config --cflags SDL2_image SDL2_ttf`
 # CFLAGS += -Wextra
 
-LIBS = `sdl2-config --libs`
-## LIBS += -lSDL2_ttf
-# LIBS += `pkg-config --libs SDL2_image SDL2_ttf`
+LIBS = -lm
+LIBS += `sdl2-config --libs` `pkg-config --libs SDL2_ttf`
 
-SRC = src/main.c src/game.c
+# SRC = src/main.c src/font.c src/game.c
+SRC = $(wildcard src/*.c)
 OUT = build/game
 
 all:
@@ -18,4 +17,3 @@ all:
 	@cp -r assets build
 	@$(CC) $(SRC) $(CFLAGS) -o $(OUT) $(LIBS)
 	@./$(OUT)
-	@rm -rf build

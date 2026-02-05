@@ -8,9 +8,16 @@ Source Code Location: https://github.com/KenniBlank/2P-Sand-Tetris
 - Why Virtual Resolution is set to what it is set at: https://codecreateplay.com/screen-resolutions-for-game-development/
 
 - Font from: https://fonts.google.com/specimen/Pixelify+Sans
-
+- Helpful: https://www.studyplan.dev/sdl2/sdl2-timers
 - Race Condition in update_sand_particles fixed! without another buffer (Not 100% sure but I think its correct)
 - Flood fill algorithm: https://www.geeksforgeeks.org/dsa/flood-fill-algorithm/
+
+- GameOverSound from freesound_community
+- Counter Sound Effect by <a href="https://pixabay.com/users/lesiakower-25701529/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=151797">Lesiakower</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=151797">Pixabay</a>
+- Background music: by <a href="https://pixabay.com/users/nocopyrightsound633-47610058/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=323176">NoCopyrightSound633</a> from <a href="https://pixabay.com/music//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=323176">Pixabay</a>
+- Sand Sound Effect by <a href="https://pixabay.com/users/artificiallyinspired-30441549/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=291368">ArtificiallyInspired</a> from <a href="https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=291368">Pixabay</a>
+- Sand Clear Sound Effect by <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=95847">freesound_community</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=95847">Pixabay</a>
+- Level Up Sound Effect by <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=6768">freesound_community</a> from <a href="https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=6768">Pixabay</a>
 
 ## TODO
 
