@@ -21,7 +21,6 @@
 #define GAME_WIDTH (int) (((2 * VIRTUAL_WIDTH) / 3) - 2 * GAME_PADDING)
 #define GAME_HEIGHT (int) (VIRTUAL_HEIGHT - 2 * GAME_PADDING)
 
-// TODO: Better name cause this shit confusing!
 #define PARTICLE_COUNT_IN_BLOCK_COLUMN (13 * SCALE_FACTOR)
 #define PARTICLE_COUNT_IN_BLOCK_ROW PARTICLE_COUNT_IN_BLOCK_COLUMN
 
@@ -32,10 +31,10 @@
 
 #define GRAVITY 9.8f
 #define TETRIMINO_MOVE_SPEED 150 * SCALE_FACTOR
-#define TIME_FOR_SAND_DELETION 1.0f
+#define TIME_FOR_SAND_DELETION 1.5f
 
-#define BASE_FONT_SIZE 64
+#define BASE_FONT_SIZE 124
 
-#define FONT_PATH "./assets/Fonts/Noto_Sans/NotoSans-VariableFont_wdth,wght.ttf"
+#define FONT_PATH "./assets/Fonts/Comfortaa.ttf"
 
 #endif

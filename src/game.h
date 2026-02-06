@@ -13,6 +13,7 @@ typedef enum {
         COLOR_RED = 0,
         COLOR_GREEN,
         COLOR_BLUE,
+        COLOR_YELLOW,
 
         COLOR_COUNT,
 
