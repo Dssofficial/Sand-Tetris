@@ -11,6 +11,7 @@ Source Code Location: https://github.com/KenniBlank/2P-Sand-Tetris
 - Helpful: https://www.studyplan.dev/sdl2/sdl2-timers
 - Race Condition in update_sand_particles fixed! without another buffer (Not 100% sure but I think its correct)
 - Flood fill algorithm: https://www.geeksforgeeks.org/dsa/flood-fill-algorithm/
+- Audio: https://www.studyplan.dev/sdl2/building-sdl/q/sdl2-audio-playback
 
 - GameOverSound from freesound_community
 - Counter Sound Effect by <a href="https://pixabay.com/users/lesiakower-25701529/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=151797">Lesiakower</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=151797">Pixabay</a>

@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "config.h"
 #include "font.h"
+#include "Audio.h"
 
 typedef enum {
         COLOR_RED = 0,
@@ -72,10 +73,6 @@ typedef struct {
 
         uint32_t totalSandCleared;
 } GameData;
-
-typedef struct {
-
-} AudioData;
 
 // Main game context
 typedef struct {

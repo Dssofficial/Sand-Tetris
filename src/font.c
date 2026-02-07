@@ -81,7 +81,7 @@ static void font_add_cache(FontData *data, SDL_Renderer *renderer, const char *t
 }
 
 static SDL_Texture* font_create_texture(FontData *data, SDL_Renderer *renderer, TTF_Font *font, const char *text, SDL_Color color, int *outW, int *outH) {
-        SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, color);
+        SDL_Surface *surface = TTF_RenderUTF8_Blended_Wrapped(font, text, color, 0);
         if (!surface) return NULL;
 
         SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -179,8 +179,8 @@ void font_render_rect(
         int drawH = (int)(texH * scale);
 
         SDL_Rect dst = {
-                .x = container.x + (container.w - drawW) / 2,
-                .y = container.y + (container.h - drawH) / 2,
+                .x = container.x,
+                .y = container.y,
                 .w = drawW,
                 .h = drawH
         };
