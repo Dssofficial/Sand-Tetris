@@ -9,6 +9,7 @@
 #include "config.h"
 #include "font.h"
 #include "Audio.h"
+#include "HighScore.h"
 
 typedef enum {
         COLOR_RED = 0,
@@ -59,19 +60,18 @@ typedef struct {
 
 typedef struct {
         // Data on all things needed for game to function
-        unsigned score, level;
+        unsigned score;
 
         int colorGrid[GAME_HEIGHT][GAME_WIDTH]; // Store color code only for all pixels on game screen (After blocks converted to sand)
 
         TetrominoCollection tetrominoCollection; // Total Tetromino type in game collection!
 
         TetrominoData currentTetromino;
+        TetrominoData ghostTetromino;
         TetrominoData nextTetromino;
 
         bool gameOver;
         bool sandRemoveTrigger;
-
-        uint32_t totalSandCleared;
 } GameData;
 
 // Main game context
@@ -83,6 +83,8 @@ typedef struct {
         SDL_PixelFormat *pixelFormat;
 
         bool running;
+
+        int HIGH_SCORES[HIGH_SCORE_COUNT];
 
         // Timing
         Uint32 last_time;

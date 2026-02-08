@@ -1,8 +1,10 @@
 #include "game.h"
 #include "Audio.h"
+#include "HighScore.h"
 #include "config.h"
 #include "font.h"
 #include <SDL2/SDL_pixels.h>
+#include <SDL2/SDL_scancode.h>
 #include <SDL2/SDL_stdinc.h>
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_ttf.h>
@@ -33,7 +35,7 @@ static void destroyCurrentTetromino(GameData* GD);
 static SDL_Color enumToColor(ColorCode CC);
 static SDL_Rect TetrominoBounds(TetrominoData* TD);
 
-static void renderTetrimino(SDL_Renderer* renderer, const TetrominoData* t);
+static void renderTetrimino(SDL_Renderer* renderer, const TetrominoData* t, bool ghostBlock);
 
 // This function called to create new tetrimino
 // For currentTetrimino once in init
@@ -47,6 +49,38 @@ static void InitializeTetriminoData(TetrominoCollection* TC, TetrominoData* TD) 
 
         TD->x = 0;
         TD->y = 0;
+}
+
+static inline void _game_init_(GameContext* GC) {
+        audio_playMusic(&GC->audioData, BG_MUSIC);
+        getScores(GC->HIGH_SCORES); // TODO: on gameOver, add current score to it
+
+        // Game Data Initialization
+        GameData* GD = &GC->gameData;
+        GD->gameOver = false;
+        GD->sandRemoveTrigger = false;
+        GD->score = 0;
+
+        // Initializing colorGrid to have no sand particles
+        for (int i = 0; i < GAME_HEIGHT; i++) {
+                for (int j = 0; j < GAME_WIDTH; j++) {
+                        GD->colorGrid[i][j] = COLOR_NONE;
+                }
+        }
+
+        // Initialize Current Tetrimono
+        InitializeTetriminoData(&GD->tetrominoCollection, &GD->currentTetromino);
+        SDL_Rect rect = TetrominoBounds(&GD->currentTetromino);
+        GD->currentTetromino.x = GAME_POS_X + (GAME_WIDTH - rect.w) * 0.5f - rect.x;
+        GD->currentTetromino.y = GAME_POS_Y - rect.h;
+
+        GD->ghostTetromino = GD->currentTetromino;
+
+        // Initialize Next Tetrimono
+        InitializeTetriminoData(&GD->tetrominoCollection, &GD->nextTetromino);
+        rect = TetrominoBounds(&GD->nextTetromino);
+        GD->nextTetromino.x = INFO_PANEL_X + (INFO_PANEL_WIDTH - rect.w) * 0.5f - rect.x;
+        GD->nextTetromino.y = INFO_PANEL_Y + (INFO_PANEL_HEIGHT) * 0.05f;
 }
 
 bool game_init(GameContext* GC) {
@@ -135,53 +169,24 @@ bool game_init(GameContext* GC) {
                 SDL_Quit();
                 return -1;
         }
-        audio_playMusic(&audio, BG_MUSIC);
+
+        // Setting up virtual resolution
 
         // Game Context Initialization
         GC->window = window;
         GC->renderer = renderer;
         GC->texture = texture;
-
         GC->fontData = fontData;
         GC->pixelFormat = SDL_AllocFormat(fmt);
-
         GC->audioData = audio;
-
         GC->running = true;
         GC->last_time = SDL_GetTicks();
         GC->delta_time = 0.0f;
         GC->keys = SDL_GetKeyboardState(NULL);
+        InitializeTetriminoCollection(&GC->gameData.tetrominoCollection);
 
-        // Game Data Initialization
-        GameData* GD = &GC->gameData;
-        GD->gameOver = false;
-        GD->sandRemoveTrigger = false;
-        GD->level = 0;
-        GD->score = 0;
-        GD->totalSandCleared = 0;
+        _game_init_(GC);
 
-        // Initializing colorGrid to have no sand particles
-        for (int i = 0; i < GAME_HEIGHT; i++) {
-                for (int j = 0; j < GAME_WIDTH; j++) {
-                        GD->colorGrid[i][j] = COLOR_NONE;
-                }
-        }
-
-        InitializeTetriminoCollection(&GD->tetrominoCollection);
-
-        // Initialize Current Tetrimono
-        InitializeTetriminoData(&GD->tetrominoCollection, &GD->currentTetromino);
-        SDL_Rect rect = TetrominoBounds(&GD->currentTetromino);
-        GD->currentTetromino.x = GAME_POS_X + (GAME_WIDTH - rect.w) * 0.5f - rect.x;
-        GD->currentTetromino.y = GAME_POS_Y - rect.h;
-
-        // Initialize Next Tetrimono
-        InitializeTetriminoData(&GD->tetrominoCollection, &GD->nextTetromino);
-        rect = TetrominoBounds(&GD->nextTetromino);
-        GD->nextTetromino.x = INFO_PANEL_X + (INFO_PANEL_WIDTH - rect.w) * 0.5f - rect.x;
-        GD->nextTetromino.y = INFO_PANEL_Y + (INFO_PANEL_HEIGHT) * 0.1f;
-
-        // Setting up virtual resolution
         SDL_RenderSetLogicalSize(GC->renderer, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
         SDL_RenderSetIntegerScale(GC->renderer, SDL_TRUE);
         return true;
@@ -205,7 +210,8 @@ void game_handle_events(GameContext* GC) {
                                                 break;
                                         }
 
-                                        case SDLK_UP: {
+                                        case SDLK_UP:
+                                        case SDLK_w: {
                                                 if (GC->gameData.gameOver) {
                                                         return;
                                                 }
@@ -213,7 +219,8 @@ void game_handle_events(GameContext* GC) {
                                                 break;
                                         }
 
-                                        case SDLK_DOWN: {
+                                        case SDLK_DOWN:
+                                        case SDLK_s: {
                                                 if (GC->gameData.gameOver) {
                                                         return;
                                                 }
@@ -230,12 +237,22 @@ void game_handle_events(GameContext* GC) {
                                                 if (GC->gameData.gameOver) {
                                                         return;
                                                 }
-                                                // TODO: Fix collision detection so that this works
-                                                //      Alternative solution: find the pixel closest to it vertically down, and add y difference to it's y
-                                                // GC->gameData.currentTetromino.velY += 100;
+
+                                                SDL_Rect rect = TetrominoBounds(&GC->gameData.currentTetromino);
+                                                if (rect.y >= GAME_POS_Y) {
+                                                        GC->gameData.currentTetromino.y = GC->gameData.ghostTetromino.y;
+                                                        destroyCurrentTetromino(&GC->gameData);
+                                                }
                                                 break;
                                         }
 
+                                        case SDLK_0: {
+                                                if (!DEBUG) break;
+
+                                                GC->gameData.score = 10000;
+                                                GC->gameData.gameOver = true;
+                                                break;
+                                        }
                                 }
                                 break;
                         }
@@ -243,17 +260,19 @@ void game_handle_events(GameContext* GC) {
         }
 
         if (GC->gameData.gameOver) {
-                // TODO: event handle: "space/enter" for restart game?
+                if (GC->keys[SDL_SCANCODE_RETURN] || GC->keys[SDL_SCANCODE_KP_ENTER]) {
+                        _game_init_(GC);
+                }
                 return;
         }
 
         // Move Current Tetrimino
         // TODO: smoother control
         TetrominoData* TD = &GC->gameData.currentTetromino;
-        if (GC->keys[SDL_SCANCODE_LEFT]) {
+        if (GC->keys[SDL_SCANCODE_LEFT] || GC->keys[SDL_SCANCODE_A]) {
                 TD->x -= TETRIMINO_MOVE_SPEED * GC->delta_time;
         }
-        if (GC->keys[SDL_SCANCODE_RIGHT]) {
+        if (GC->keys[SDL_SCANCODE_RIGHT] || GC->keys[SDL_SCANCODE_D]) {
                 TD->x += TETRIMINO_MOVE_SPEED * GC->delta_time;
         }
 
@@ -280,7 +299,6 @@ static void removeParticlesGracefully(GameContext* GC) {
         int (*colorGrid)[GAME_WIDTH] = GC->gameData.colorGrid;
         static float timer = 0.0f;
         timer += GC->delta_time;
-        unsigned score = 0;
 
         if (timer > (TIME_FOR_SAND_DELETION - 0.1f)) {
                 audio_playSFX(&GC->audioData, SFX_SAND_CLEAR);
@@ -290,36 +308,26 @@ static void removeParticlesGracefully(GameContext* GC) {
                         for (int x = 0; x < GAME_WIDTH; x++) {
                                 if (colorGrid[y][x] == COLOR_DELETE_MARKED_SAND) {
                                         colorGrid[y][x] = COLOR_NONE;
-                                        score++;
+                                        GC->gameData.score++;
                                 }
                         }
                 }
 
-                // TODO: fix this so that game is replayable and level doesn't jump
-                unsigned finalScore = (unsigned)(score * log((float) score + 1));
-                GC->gameData.score += finalScore;
-                GC->gameData.totalSandCleared += score;
-
-                if (GC->gameData.level < 5) {
-                        GC->gameData.level = GC->gameData.totalSandCleared / 500;
-                } else {
-                        GC->gameData.level = 5 + (unsigned)(logf((float)(GC->gameData.totalSandCleared - 2500) / 500.0f + 1.0f) / logf(1.6f));
-                }
-
-                // Additinal Reward for scoring: decrease the current falling tetrimino falling
-                GC->gameData.currentTetromino.velY = fmaxf(GC->gameData.currentTetromino.velY * 0.75f, GRAVITY);
+                // Additinal Reward for scoring: half the current falling tetrimino falling
+                GC->gameData.currentTetromino.velY = GC->gameData.currentTetromino.velY * 0.5f;
 
                 GC->gameData.sandRemoveTrigger = false;
                 timer = 0.0f;
         }
 }
 
-static bool update_sand_particle_falling(int (*colorGrid)[GAME_WIDTH], float deltaTime, int level) {
+static bool update_sand_particle_falling(int (*colorGrid)[GAME_WIDTH], float deltaTime, unsigned score) {
         static float sandAccumulator = 0.0f;
         sandAccumulator += deltaTime;
 
         bool returnValue = false; // whether sands that need to be removed is in the colorGrid
 
+        int level = floor(score / 1500.0f) + 1;
         while (sandAccumulator >= SAND_STEP_TIME) { // Move the level, faster sand falls cause for fun!
                 sandAccumulator -= fmax(SAND_STEP_TIME * 1 / 2.5f, (SAND_STEP_TIME / (level / 10.0f + 1)));
 
@@ -373,56 +381,39 @@ static bool update_sand_particle_falling(int (*colorGrid)[GAME_WIDTH], float del
         return returnValue;
 }
 
-static bool checkIfTetriminoCollidingWithFloor(TetrominoData* TD) {
-        // Check if tetromino collides with floor, snap to floor if true
-        int maxRow = -1;
-
-        const unsigned short (*shape)[4] = TD->shape->shape[TD->rotation];
-        for (int row = 0; row < 4; row++) {
-                for (int col = 0; col < 4; col++) {
-                        if (shape[row][col]) {
-                                if (row > maxRow) maxRow = row;
-                        }
-                }
-        }
-
-        int maxY = GAME_POS_Y + GAME_HEIGHT;
-        int pieceBottom = TD->y + (maxRow + 1) * PARTICLE_COUNT_IN_BLOCK_ROW;
-        if (pieceBottom >= maxY) {
-                TD->y -= (pieceBottom - maxY);
-                return true;
-        }
-        return false;
-}
-
-static bool checkIfTetriminoCollidesWithOtherParticles(GameData* GD) {
-        // TODO: Fix it
-        TetrominoData* TD = &GD->currentTetromino;
+static bool checkTetrominoCollision(GameData* GD, TetrominoData* TD) {
         const unsigned short (*shape)[4] = TD->shape->shape[TD->rotation];
 
         for (int row = 0; row < 4; row++) {
                 for (int col = 0; col < 4; col++) {
-                        if (!shape[row][col] || (row < 3 && shape[row + 1][col])) {
+                        if (!shape[row][col] || (row < 3 && shape[row + 1][col]))  {
                                 continue;
                         }
 
+                        // Calculate the actual position of each block within the tetromino
                         int blockBaseX = TD->x + col * PARTICLE_COUNT_IN_BLOCK_COLUMN;
                         int blockBaseY = TD->y + row * PARTICLE_COUNT_IN_BLOCK_ROW;
 
+                        // Check each particle within the block
                         for (int yOff = 0; yOff < PARTICLE_COUNT_IN_BLOCK_ROW; yOff++) {
-                                int gridY = blockBaseY + yOff;
-
-                                if (gridY < 0 || gridY >= GAME_HEIGHT) {
-                                        continue;
-                                }
-
                                 for (int xOff = 0; xOff < PARTICLE_COUNT_IN_BLOCK_COLUMN; xOff++) {
-                                        int gridX = blockBaseX + xOff;
+                                        int worldX = blockBaseX + xOff;
+                                        int worldY = blockBaseY + yOff;
 
-                                        if (gridX < 0 || gridX >= GAME_WIDTH) {
+                                        // Convert to grid coordinates
+                                        int gridX = worldX - GAME_POS_X;
+                                        int gridY = worldY - GAME_POS_Y;
+
+                                        if (gridY < 0) {
                                                 continue;
                                         }
 
+                                        // Check bounds - collision with walls or floor
+                                        if (gridX < 0 || gridX >= GAME_WIDTH || gridY >= GAME_HEIGHT) {
+                                                return true;
+                                        }
+
+                                        // Check collision with existing particles
                                         if (GD->colorGrid[gridY][gridX] != COLOR_NONE) {
                                                 return true;
                                         }
@@ -497,6 +488,20 @@ static void checkIfGameOver(GameData* GD) {
         }
 };
 
+// Update ghost tetromino position
+static void updateGhostTetromino(GameData* GD) {
+        // Copy current tetromino properties
+        GD->ghostTetromino = GD->currentTetromino;
+
+        // Move ghost down until it collides
+        while (!checkTetrominoCollision(GD, &GD->ghostTetromino)) {
+                GD->ghostTetromino.y += 1;
+        }
+
+        // Move back up one step since we went one step too far
+        GD->ghostTetromino.y -= 1;
+}
+
 void game_update(GameContext* GC) {
         GameData* GD = &GC->gameData;
         TetrominoData* TD = &GD->currentTetromino;
@@ -505,7 +510,13 @@ void game_update(GameContext* GC) {
 
         static float game_over_time = 0;
         if (GD->gameOver) {
+                audio_stopMusic(&GC->audioData);
                 if (game_over_time < 3.0f) {
+                        if (game_over_time == 0) {
+                                if (postScore(GD->score)) {
+                                        getScores(GC->HIGH_SCORES);
+                                }
+                        }
                         audio_playSFX(&GC->audioData, SFX_GAME_OVER);
                         game_over_time += GC->delta_time;
                 }
@@ -514,7 +525,7 @@ void game_update(GameContext* GC) {
                 game_over_time = 0;
         }
 
-        if ((GD->sandRemoveTrigger = update_sand_particle_falling(GD->colorGrid, GC->delta_time, GD->level))) {
+        if ((GD->sandRemoveTrigger = update_sand_particle_falling(GD->colorGrid, GC->delta_time, GC->gameData.score))) {
                 removeParticlesGracefully(GC);
         }
 
@@ -523,14 +534,25 @@ void game_update(GameContext* GC) {
         //      1.a if it is, convert that to sand and add to colorGrid, swap currentTetromino to nextTetromino and spawn newTetromino for nextTetromino
         //              Note: make sure to set the x, y to different for new tetromino
         //      1.b if it's not, Update current tetromino's location
-        if (checkIfTetriminoCollidesWithOtherParticles(GD) | checkIfTetriminoCollidingWithFloor(TD)) {
-                // 1.a
+        // Apply gravity and move tetromino
+        float fallSpeed = GRAVITY * (1 + (floor(GC->gameData.score / 1500.0f) + 1) * 0.3f);
+        TD->velY += fallSpeed * GC->delta_time;
+
+        float oldY = TD->y;
+        TD->y += TD->velY * GC->delta_time;
+
+        // Check if the new position causes a collision
+        if (checkTetrominoCollision(GD, TD)) {
+                // Revert to old position
+                TD->y = oldY;
+                TD->velY = 0;
+
+                // Lock the piece in place
                 destroyCurrentTetromino(GD);
-        } else {
-                // 1. b
-                TD->velY += fmin(GRAVITY * GC->delta_time * 5, GRAVITY * (GC->gameData.level / 10.0f + 1) * GC->delta_time);
-                TD->y += TD->velY * GC->delta_time;
         }
+
+        // Update ghost tetromino position
+        updateGhostTetromino(GD);
 
         // Maximum clearance algorithm, delete sand, ... score, level, ...
         // 2. Maximum clearance
@@ -539,33 +561,28 @@ void game_update(GameContext* GC) {
         sandClearance(GD);
 }
 
-static void renderSandBlock(SDL_Renderer* renderer, SandBlock* SB) {
-        // Border!
-        SDL_Rect SB_Rect = {
-                .x = (int) SB->x,
-                .y = (int) SB->y,
-                .w = PARTICLE_COUNT_IN_BLOCK_COLUMN,
-                .h = PARTICLE_COUNT_IN_BLOCK_ROW
-        };
-        SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(COLOR_DELETE_MARKED_SAND)));
-        SDL_RenderDrawRect(renderer, &SB_Rect);
+static void renderSandBlock(SDL_Renderer* renderer, SandBlock* SB, bool ghostBlock) {
+        SDL_Color fillColor = enumToColor(SB->color);
+        if (ghostBlock) {
+                fillColor.a = 150;
+        }
 
-        // Sand
-        SB_Rect.x += 1;
-        SB_Rect.y += 1;
-        SB_Rect.w -= 2;
-        SB_Rect.h -= 2;
-        SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(SB->color)));
+        SDL_Rect SB_Rect = {.x = (int) SB->x, .y = (int) SB->y, .w = PARTICLE_COUNT_IN_BLOCK_COLUMN, .h = PARTICLE_COUNT_IN_BLOCK_ROW};
+        SDL_SetRenderDrawColor(renderer, unpack_color(fillColor));
         SDL_RenderFillRect(renderer, &SB_Rect);
+
+        SDL_Color borderColor = enumToColor(COLOR_DELETE_MARKED_SAND);
+        if (ghostBlock) {
+                borderColor.a = 100;
+        }
+        SDL_SetRenderDrawColor(renderer, unpack_color(borderColor));
+        SDL_RenderDrawRect(renderer, &SB_Rect);
 }
 
-static void renderTetrimino(SDL_Renderer* renderer, const TetrominoData* t) {
-        SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(t->color)));
 
+static void renderTetrimino(SDL_Renderer* renderer, const TetrominoData* t, bool ghostBlock) {
         SandBlock sb = { .color = t->color, .velY = 0 };
-
         const unsigned short (*shape)[4] = t->shape->shape[t->rotation]; // Credit: ChatGPT, didn't know how to make such pointer
-
         for (int row = 0; row < 4; row++) {
                 for (int col = 0; col < 4; col++) {
                         if (shape[row][col] == 0) {
@@ -574,8 +591,7 @@ static void renderTetrimino(SDL_Renderer* renderer, const TetrominoData* t) {
 
                         sb.x = t->x + col * PARTICLE_COUNT_IN_BLOCK_COLUMN;
                         sb.y = t->y + row * PARTICLE_COUNT_IN_BLOCK_ROW;
-
-                        renderSandBlock(renderer, &sb);
+                        renderSandBlock(renderer, &sb, ghostBlock);
                 }
         }
 }
@@ -665,12 +681,15 @@ static void renderAllParticles(GameContext* GC) {
 static void renderGameUI(SDL_Renderer* renderer, GameContext* GC) {
         SDL_SetRenderDrawColor(renderer, unpack_color(enumToColor(COLOR_BORDER)));
 
+        // Outer border
         SDL_Rect r = { 0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT };
         SDL_RenderDrawRect(renderer, &r);
 
+        // Game area border
         r.w = (r.w / 3) * 2;
         SDL_RenderDrawRect(renderer, &r);
 
+        // Play field border
         r = (SDL_Rect) {
                 .x = GAME_POS_X - 1,
                 .y = GAME_POS_Y - 1,
@@ -678,34 +697,51 @@ static void renderGameUI(SDL_Renderer* renderer, GameContext* GC) {
                 .h = GAME_HEIGHT + 2,
         };
         SDL_RenderDrawRect(renderer, &r);
-        renderTetrimino(GC->renderer, &GC->gameData.nextTetromino);
+
+        // Render next tetromino preview
+        renderTetrimino(GC->renderer, &GC->gameData.nextTetromino, false);
 
         if (GC->gameData.gameOver) {
-                // TODO
-                // Display Score + Other infos
+                // TODO: Display Game Over screen
         }
 
         char str[256];
-        SDL_Rect txtContainerRect;
-
-        txtContainerRect = (SDL_Rect) {
+        SDL_Rect txtContainerRect = (SDL_Rect) {
                 .x = INFO_PANEL_X + GAME_PADDING,
                 .y = GC->gameData.nextTetromino.y + PARTICLE_COUNT_IN_BLOCK_ROW * 4,
                 .w = INFO_PANEL_WIDTH - GAME_PADDING * 2,
                 .h = 20 * SCALE_FACTOR,
         };
+
+        // Next piece label
         snprintf(str, sizeof(str), "Next: %s", GC->gameData.nextTetromino.shape->name);
         font_render_rect(&GC->fontData, GC->renderer, str, FONT_PATH, -1, TTF_STYLE_NORMAL, enumToColor(COLOR_BORDER), txtContainerRect);
 
-        // SCORE
+        // Current score
+        txtContainerRect.y += txtContainerRect.h;
         snprintf(str, sizeof(str), "Score: %15d", GC->gameData.score);
-        txtContainerRect.y += 2 * txtContainerRect.h;
         font_render_rect(&GC->fontData, GC->renderer, str, FONT_PATH, -1, TTF_STYLE_NORMAL, enumToColor(COLOR_BORDER), txtContainerRect);
 
-        // LEVEL
-        txtContainerRect.y += txtContainerRect.h;
-        snprintf(str, sizeof(str), "Level: %15d", GC->gameData.level);
+        // High scores section
+        txtContainerRect.y += 3 * txtContainerRect.h;
+        txtContainerRect.x = INFO_PANEL_X;
+        snprintf(str, sizeof(str), "High Scores:");
         font_render_rect(&GC->fontData, GC->renderer, str, FONT_PATH, -1, TTF_STYLE_NORMAL, enumToColor(COLOR_BORDER), txtContainerRect);
+
+        // High scores list
+        txtContainerRect.x = INFO_PANEL_X + GAME_PADDING;
+        txtContainerRect.y += txtContainerRect.h;
+        txtContainerRect.h -= 10 * SCALE_FACTOR;
+
+        for (int i = 0; i < HIGH_SCORE_COUNT; i++) {
+                if (GC->HIGH_SCORES[i] == 0) {
+                        snprintf(str, sizeof(str), "%2d. -------", (i + 1));
+                } else {
+                        snprintf(str, sizeof(str), "%2d. %d", (i + 1), GC->HIGH_SCORES[i]);
+                }
+                font_render_rect(&GC->fontData, GC->renderer, str, FONT_PATH, -1, TTF_STYLE_NORMAL, enumToColor(COLOR_BORDER), txtContainerRect);
+                txtContainerRect.y += txtContainerRect.h * 1.5f;
+        }
 
         // TODO: Audio Controller Slider
 }
@@ -725,7 +761,8 @@ void game_render(GameContext* GC) {
 
         // Game
         renderAllParticles(GC);
-        renderTetrimino(GC->renderer, &GC->gameData.currentTetromino);
+        renderTetrimino(GC->renderer, &GC->gameData.currentTetromino, false);
+        renderTetrimino(GC->renderer, &GC->gameData.ghostTetromino, true);
 
         // Display modified renderer
         SDL_RenderPresent(GC->renderer);
@@ -750,120 +787,120 @@ static inline void InitializeTetriminoCollection(TetrominoCollection* TC) {
         TC->tetrominos[TC->count++] = (struct Tetromino) {
                 .name = "Line Tetrimino", // Display Name!
                 .shape = {
-                        { // Rotation 1: rotation left of rotation 4
-                                {0, 0, 0, 0},
-                                {1, 1, 1, 1},
-                                {0, 0, 0, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 2: rotation left of rotation 1
-                                {0, 1, 0, 0},
-                                {0, 1, 0, 0},
-                                {0, 1, 0, 0},
-                                {0, 1, 0, 0},
-                        },
-                        { // Rotation 3: rotation left of rotation 2
-                                {0, 0, 0, 0},
-                                {0, 0, 0, 0},
-                                {1, 1, 1, 1},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 4: rotation left of rotation 3
-                                {0, 0, 1, 0},
-                                {0, 0, 1, 0},
-                                {0, 0, 1, 0},
-                                {0, 0, 1, 0},
-                        }
+        { // Rotation 1: rotation left of rotation 4
+        {0, 0, 0, 0},
+        {1, 1, 1, 1},
+        {0, 0, 0, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 2: rotation left of rotation 1
+        {0, 1, 0, 0},
+        {0, 1, 0, 0},
+        {0, 1, 0, 0},
+        {0, 1, 0, 0},
+        },
+        { // Rotation 3: rotation left of rotation 2
+        {0, 0, 0, 0},
+        {0, 0, 0, 0},
+        {1, 1, 1, 1},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 4: rotation left of rotation 3
+        {0, 0, 1, 0},
+        {0, 0, 1, 0},
+        {0, 0, 1, 0},
+        {0, 0, 1, 0},
+        }
                 }
         };
 
         TC->tetrominos[TC->count++] = (struct Tetromino) {
                 .name = "Square Tetrimino", // Display Name!
                 .shape = {
-                        { // Rotation 1: rotation left of rotation 4
-                                {0, 0, 0, 0},
-                                {0, 1, 1, 0},
-                                {0, 1, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 2: rotation left of rotation 1
-                                {0, 0, 0, 0},
-                                {0, 1, 1, 0},
-                                {0, 1, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 3: rotation left of rotation 2
-                                {0, 0, 0, 0},
-                                {0, 1, 1, 0},
-                                {0, 1, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 4: rotation left of rotation 3
-                                {0, 0, 0, 0},
-                                {0, 1, 1, 0},
-                                {0, 1, 1, 0},
-                                {0, 0, 0, 0},
-                        }
+        { // Rotation 1: rotation left of rotation 4
+        {0, 0, 0, 0},
+        {0, 1, 1, 0},
+        {0, 1, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 2: rotation left of rotation 1
+        {0, 0, 0, 0},
+        {0, 1, 1, 0},
+        {0, 1, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 3: rotation left of rotation 2
+        {0, 0, 0, 0},
+        {0, 1, 1, 0},
+        {0, 1, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 4: rotation left of rotation 3
+        {0, 0, 0, 0},
+        {0, 1, 1, 0},
+        {0, 1, 1, 0},
+        {0, 0, 0, 0},
+        }
                 }
         };
 
         TC->tetrominos[TC->count++] = (struct Tetromino) {
                 .name = "Skew Tetrimino", // Display Name!
                 .shape = {
-                        { // Rotation 1: rotation left of rotation 4
-                                {0, 0, 0, 0},
-                                {0, 0, 1, 1},
-                                {0, 1, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 2: rotation left of rotation 1
-                                {0, 1, 0, 0},
-                                {0, 1, 1, 0},
-                                {0, 0, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 3: rotation left of rotation 2
-                                {0, 0, 0, 0},
-                                {0, 1, 1, 0},
-                                {1, 1, 0, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 4: rotation left of rotation 3
-                                {0, 0, 0, 0},
-                                {0, 1, 0, 0},
-                                {0, 1, 1, 0},
-                                {0, 0, 1, 0},
-                        }
+        { // Rotation 1: rotation left of rotation 4
+        {0, 0, 0, 0},
+        {0, 0, 1, 1},
+        {0, 1, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 2: rotation left of rotation 1
+        {0, 1, 0, 0},
+        {0, 1, 1, 0},
+        {0, 0, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 3: rotation left of rotation 2
+        {0, 0, 0, 0},
+        {0, 1, 1, 0},
+        {1, 1, 0, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 4: rotation left of rotation 3
+        {0, 0, 0, 0},
+        {0, 1, 0, 0},
+        {0, 1, 1, 0},
+        {0, 0, 1, 0},
+        }
                 }
         };
 
         TC->tetrominos[TC->count++] = (struct Tetromino) {
                 .name = "L Tetrimino", // Display Name!
                 .shape = {
-                        { // Rotation 1: rotation left of rotation 4
-                                {0, 0, 0, 0},
-                                {0, 1, 0, 0},
-                                {0, 1, 0, 0},
-                                {0, 1, 1, 0},
-                        },
-                        { // Rotation 2: rotation left of rotation 1
-                                {0, 0, 0, 0},
-                                {0, 0, 0, 1},
-                                {0, 1, 1, 1},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 3: rotation left of rotation 2
-                                {0, 1, 1, 0},
-                                {0, 0, 1, 0},
-                                {0, 0, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 4: rotation left of rotation 3
-                                {0, 0, 0, 0},
-                                {1, 1, 1, 0},
-                                {1, 0, 0, 0},
-                                {0, 0, 0, 0},
-                        }
+        { // Rotation 1: rotation left of rotation 4
+        {0, 0, 0, 0},
+        {0, 1, 0, 0},
+        {0, 1, 0, 0},
+        {0, 1, 1, 0},
+        },
+        { // Rotation 2: rotation left of rotation 1
+        {0, 0, 0, 0},
+        {0, 0, 0, 1},
+        {0, 1, 1, 1},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 3: rotation left of rotation 2
+        {0, 1, 1, 0},
+        {0, 0, 1, 0},
+        {0, 0, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 4: rotation left of rotation 3
+        {0, 0, 0, 0},
+        {1, 1, 1, 0},
+        {1, 0, 0, 0},
+        {0, 0, 0, 0},
+        }
                 }
         };
 
@@ -871,30 +908,30 @@ static inline void InitializeTetriminoCollection(TetrominoCollection* TC) {
         TC->tetrominos[TC->count++] = (struct Tetromino) {
                 .name = "T Tetrimino", // Display Name!
                 .shape = {
-                        { // Rotation 1: rotation left of rotation 4
-                                {0, 0, 0, 0},
-                                {0, 1, 1, 1},
-                                {0, 0, 1, 0},
-                                {0, 0, 1, 0},
-                        },
-                        { // Rotation 2: rotation left of rotation 1
-                                {0, 1, 0, 0},
-                                {0, 1, 1, 1},
-                                {0, 1, 0, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 3: rotation left of rotation 2
-                                {0, 1, 0, 0},
-                                {0, 1, 0, 0},
-                                {1, 1, 1, 0},
-                                {0, 0, 0, 0},
-                        },
-                        { // Rotation 4: rotation left of rotation 3
-                                {0, 0, 0, 0},
-                                {0, 0, 1, 0},
-                                {1, 1, 1, 0},
-                                {0, 0, 1, 0},
-                        }
+        { // Rotation 1: rotation left of rotation 4
+        {0, 0, 0, 0},
+        {0, 1, 1, 1},
+        {0, 0, 1, 0},
+        {0, 0, 1, 0},
+        },
+        { // Rotation 2: rotation left of rotation 1
+        {0, 1, 0, 0},
+        {0, 1, 1, 1},
+        {0, 1, 0, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 3: rotation left of rotation 2
+        {0, 1, 0, 0},
+        {0, 1, 0, 0},
+        {1, 1, 1, 0},
+        {0, 0, 0, 0},
+        },
+        { // Rotation 4: rotation left of rotation 3
+        {0, 0, 0, 0},
+        {0, 0, 1, 0},
+        {1, 1, 1, 0},
+        {0, 0, 1, 0},
+        }
                 }
         };
 }
@@ -1058,5 +1095,5 @@ static void destroyCurrentTetromino(GameData* GD) {
         InitializeTetriminoData(&GD->tetrominoCollection, &GD->nextTetromino);
         rect = TetrominoBounds(&GD->nextTetromino);
         GD->nextTetromino.x = INFO_PANEL_X + (INFO_PANEL_WIDTH - rect.w) * 0.5f - rect.x;
-        GD->nextTetromino.y = INFO_PANEL_Y + (INFO_PANEL_HEIGHT) * 0.1f;
+        GD->nextTetromino.y = INFO_PANEL_Y + (INFO_PANEL_HEIGHT) * 0.05f;
 }

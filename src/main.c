@@ -35,7 +35,7 @@ int main(void) {
 
                         frame_count++;
                         if (current_time - fps_timer >= 1000) {
-                                printf("FPS: %d, Delta: %.3fms, Score: %d, Level: %d\n", frame_count, GC.delta_time * 1000.0f, GC.gameData.score, GC.gameData.level);
+                                printf("FPS: %d, Delta: %.3fms, Score: %d\n", frame_count, GC.delta_time * 1000.0f, GC.gameData.score);
                                 fflush(stdout);
 
                                 frame_count = 0;

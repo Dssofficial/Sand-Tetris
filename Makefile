@@ -16,4 +16,4 @@ all:
 	@mkdir -p build
 	@cp -r assets build
 	@$(CC) $(SRC) $(CFLAGS) -o $(OUT) $(LIBS)
-	@./$(OUT)
+	@cd build && ./game
